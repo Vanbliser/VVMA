@@ -31,14 +31,35 @@ const getUserByIdModel = async (id) => {
   return { ...user, groups };
 };
 
-const updateUserModel = async (id, { username, email, bio }) => {
+const updateUserModel = async (id, updateFields) => {
     const [existing] = await db.execute("SELECT id FROM users WHERE id = ?", [id]);
     if (existing.length === 0) return null;
     
-    await db.execute(
-      "UPDATE users SET username = ?, email = ?, bio = ? WHERE id = ?",
-      [username, email, bio, id]
-    );
+    // await db.execute(
+    //   "UPDATE users SET username = ?, email = ?, bio = ?, role = ? WHERE id = ?",
+    //   [username, email, bio, role, id]
+    // );
+
+    // Dynamically build the update query
+    const fields = [];
+    const values = [];
+
+    for (const [key, value] of Object.entries(updateFields)) {
+        if (value !== undefined) {  // Only update fields that exist in the request
+            fields.push(`${key} = ?`);
+            values.push(value);
+        }
+    }
+
+    if (fields.length === 0) {
+        return existing[0]; // No fields to update, return the existing user
+    }
+
+    values.push(id);
+    
+    const query = `UPDATE users SET ${fields.join(", ")} WHERE id = ?`;
+
+    await db.execute(query, values);
    
     const [rows] = await db.execute(
       "SELECT id, username, email, role, bio, created_at FROM users WHERE id = ?",
@@ -55,9 +76,16 @@ const deleteUserModel = async (id) => {
     return result.affectedRows;
   };
 
+  const getUsersModel = async () => {
+    const query = "SELECT id, username, email, role, bio, created_at FROM users";
+    const [users] = await db.execute(query);
+    return users;
+  };
+
 module.exports = {
   getMyProfileModel,
   getUserByIdModel,
   updateUserModel,
-  deleteUserModel
+  deleteUserModel,
+  getUsersModel
 };

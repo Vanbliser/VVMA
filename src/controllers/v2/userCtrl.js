@@ -2,7 +2,8 @@ const {
   getMyProfileModel, 
   getUserByIdModel, 
   updateUserModel, 
-  deleteUserModel 
+  deleteUserModel,
+  getUsersModel
 } = require('../../models/userModel');
 
 const jwt = require('jsonwebtoken');
@@ -80,6 +81,17 @@ const getMyProfile = async (req, res) => {
  */
 const getUserById = async (req, res) => {
   try {
+    // Check if authorization header exists
+    if (!req.headers.authorization) {
+      return res.status(401).json({ error: 'Unauthorized: Missing authorization header' });
+    }
+
+    // Check if user exists in the request object (from auth middleware)
+    if (!req.user || !req.user.userId) {
+      return res.status(403).json({ error: 'Forbidden: User authentication failed' });
+    }
+
+    const userId = req.user.userId;
     const user = await getUserByIdModel(req.params.id);
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
@@ -121,9 +133,25 @@ const getUserById = async (req, res) => {
  */
 const updateUser = async (req, res) => {
   try {
-    const user = await updateUserModel(req.params.id, req.body);
-    if (!user) return res.status(404).json({ error: 'User not found' });
-    res.json({ message: 'User updated successfully', user });
+    // Check if authorization header exists
+    if (!req.headers.authorization) {
+      return res.status(401).json({ error: 'Unauthorized: Missing authorization header' });
+    }
+
+    // Check if user exists in the request object (from auth middleware)
+    if (!req.user || !req.user.userId) {
+      return res.status(403).json({ error: 'Forbidden: User authentication failed' });
+    }
+
+    const userId = Number(req.params.id);
+    // Check if the user is authorized to update (either himself or an admin)
+    if (req.user.userId == userId || String(req.user.role) == 'admin') {
+      const user = await updateUserModel(req.params.id, req.body);
+      if (!user) return res.status(404).json({ error: 'User not found' });
+      res.json({ message: 'User updated successfully', user });
+    } else {
+      return res.status(403).json({ error: `Forbidden: Not really authorized to update this user ${req.user.role}` });
+    }
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -165,9 +193,51 @@ const deleteUser = async (req, res) => {
   }
 };
 
+/**
+ * @swagger
+ * /api/users:
+ *   get:
+ *     summary: Retrieve all users
+ *     tags:
+ *       - Users
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Successfully retrieved all users.
+ *       401:
+ *         description: Unauthorized, missing or invalid authentication.
+ *       403:
+ *         description: Forbidden, user does not have permission.
+ *       500:
+ *         description: Internal server error.
+ */
+const getAllUsers = async (req, res) => {
+  try {
+    // Ensure the request is authenticated
+    if (!req.user) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    // Ensure the user is an admin
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Not authorized to view all users' });
+    }
+
+    // Fetch all users from the database
+    const users = await getUsersModel();
+    res.json(users);
+  } catch (err) {
+    console.error("Error in getAllUsers:", err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+
 module.exports = {
   getMyProfile,
   getUserById,
   updateUser,
-  deleteUser
+  deleteUser,
+  getAllUsers
 };

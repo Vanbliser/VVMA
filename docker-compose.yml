@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   api:
     build: .
@@ -16,6 +14,7 @@ services:
       DB_NAME: user_management
       MAILHOG_HOST: mailhog
       MAILHOG_PORT: 1025
+    restart: always
 
   db:
     image: mysql:8
